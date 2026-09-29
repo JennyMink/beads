@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/steveyegge/beads/internal/workapi"
 )
 
 // resetListFilterFlagState restores listCmd's filter flags to their unparsed
@@ -173,4 +175,63 @@ func TestResetListFilterFlagsLowersChanged(t *testing.T) {
 			t.Fatalf("--%s still reads as Changed after resetListFilterFlags", name)
 		}
 	}
+}
+
+// TestListStateAndStatusArms pins the three reachable arms of the new flag
+// registration that the existing cases do not reach: the hidden --state alias
+// unions like --status, a union that includes "all" is refused downstream
+// rather than silently narrowing, and --status wins over --state when both are
+// given (gatherListInput only consults --state when --status is empty).
+func TestListStateAndStatusArms(t *testing.T) {
+	t.Run("repeated --state unions", func(t *testing.T) {
+		resetListFilterFlagState(t)
+
+		if err := listCmd.ParseFlags([]string{"--state", "open", "--state", "closed"}); err != nil {
+			t.Fatalf("ParseFlags: %v", err)
+		}
+		got, err := listCmd.Flags().GetString("state")
+		if err != nil {
+			t.Fatalf("GetString(state): %v", err)
+		}
+		if got != "open,closed" {
+			t.Fatalf("repeated --state = %q, want union %q", got, "open,closed")
+		}
+	})
+
+	t.Run("union including all is refused, not narrowed", func(t *testing.T) {
+		resetListFilterFlagState(t)
+
+		if err := listCmd.ParseFlags([]string{"--status", "all", "--status", "open"}); err != nil {
+			t.Fatalf("ParseFlags: %v", err)
+		}
+		in, err := gatherListInput(listCmd)
+		if err != nil {
+			t.Fatalf("gatherListInput: %v", err)
+		}
+		if in.Status != "all,open" {
+			t.Fatalf("unioned status = %q, want %q", in.Status, "all,open")
+		}
+		// The union is what makes this reachable: before this PR the repeat
+		// kept only "open" and the combination never reached the guard.
+		if _, err := workapi.BuildListFilter(in.ListRequest, workapi.ListConfig{}); err == nil {
+			t.Fatal("BuildListFilter accepted a union containing \"all\", want a refusal")
+		} else if !strings.Contains(err.Error(), "cannot be combined") {
+			t.Fatalf("BuildListFilter error = %v, want a \"cannot be combined\" refusal", err)
+		}
+	})
+
+	t.Run("--status outranks --state", func(t *testing.T) {
+		resetListFilterFlagState(t)
+
+		if err := listCmd.ParseFlags([]string{"--status", "open", "--state", "closed"}); err != nil {
+			t.Fatalf("ParseFlags: %v", err)
+		}
+		in, err := gatherListInput(listCmd)
+		if err != nil {
+			t.Fatalf("gatherListInput: %v", err)
+		}
+		if in.Status != "open" {
+			t.Fatalf("in.Status = %q, want %q (--state must not merge into a non-empty --status)", in.Status, "open")
+		}
+	})
 }

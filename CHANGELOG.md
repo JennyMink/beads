@@ -14,11 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bd list --status open --status closed --status pinned` kept only `pinned` —
   a census over 477 issues quietly answered over 3, with nothing in the output
   to distinguish the narrowed answer from a correct one. Repeats of those three
-  flags now union with the comma form (`--status open --status closed` ≡
-  `--status open,closed`). `--type` and `--assignee` are single-valued all the
-  way down — unioning would fail type validation or exact-match nobody — so a
-  repeat of either now refuses loudly instead of silently keeping the last
-  value: `--type given more than once (already "bug"); pass a single value`.
+  flags now accumulate (duplicates collapse) instead of overwriting, so
+  `--status open --status closed` selects the same set as
+  `--status open,closed`. The one repeat that does not simply accumulate is one
+  involving `--status all`: `all` cannot be combined with other statuses, so
+  `--status all --status open` is now refused rather than narrowed to `open`.
+  `--type` and `--assignee` are single-valued all the way down — unioning would
+  fail type validation or exact-match nobody — so a repeat of either now refuses
+  loudly instead of silently keeping the last value:
+  `invalid argument "epic" for "-t, --type" flag: --type given more than once
+  (already "bug"); pass a single value`.
   Single-flag and comma-form spellings behave exactly as before.
 
 - **The #6716 fan-in stall is fixed on the proxied-server route and the

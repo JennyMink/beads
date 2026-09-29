@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -25,21 +26,12 @@ func (f *unionStringFlag) Set(s string) error {
 		f.value = s
 	default:
 		for _, tok := range strings.Split(s, ",") {
-			if !slicesContains(strings.Split(f.value, ","), tok) {
+			if !slices.Contains(strings.Split(f.value, ","), tok) {
 				f.value += "," + tok
 			}
 		}
 	}
 	return nil
-}
-
-func slicesContains(list []string, want string) bool {
-	for _, have := range list {
-		if have == want {
-			return true
-		}
-	}
-	return false
 }
 
 func (f *unionStringFlag) String() string { return f.value }
